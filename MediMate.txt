@@ -1,0 +1,216 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:http/http.dart' as http;
+
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Alarm App',
+      theme: ThemeData(
+        primarySwatch: Colors.red,
+      ),
+      home: const MyHomePage(),
+    );
+  }
+}
+
+class MyHomePage extends StatefulWidget {
+  const MyHomePage({Key? key}) : super(key: key);
+
+  @override
+  _MyHomePageState createState() => _MyHomePageState();
+}
+
+class _MyHomePageState extends State<MyHomePage> {
+  final String apiKey = '4ALYSDTK50DGJBUV';
+  final List<TextEditingController> hourControllers = [
+    TextEditingController(),
+    TextEditingController(),
+    TextEditingController(),
+  ];
+  final List<TextEditingController> minuteControllers = [
+    TextEditingController(),
+    TextEditingController(),
+    TextEditingController(),
+  ];
+  final List<String> alarmTimes = ['No alarm set', 'No alarm set', 'No alarm set'];
+  final String channelId = '2133477'; // Channel ID stored in code
+
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+  FlutterLocalNotificationsPlugin();
+
+  Future<void> initNotifications() async {
+    const AndroidInitializationSettings initializationSettingsAndroid =
+    AndroidInitializationSettings('@mipmap/ic_launcher');
+    final InitializationSettings initializationSettings =
+    InitializationSettings(android: initializationSettingsAndroid);
+    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    initNotifications();
+    startDataChecking();
+  }
+
+  Future<void> showNotification({required String title, required String body}) async {
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+    AndroidNotificationDetails(
+      'channel_id',
+      'channel_name',
+      importance: Importance.max,
+      priority: Priority.high,
+    );
+    const NotificationDetails platformChannelSpecifics =
+    NotificationDetails(android: androidPlatformChannelSpecifics);
+
+    await flutterLocalNotificationsPlugin.show(
+      0,
+      title,
+      body,
+      platformChannelSpecifics,
+    );
+  }
+
+  Future<void> checkThingSpeakData() async {
+    final url = 'https://api.thingspeak.com/channels/2133477/fields/7/last.txt';
+    final response = await http.get(Uri.parse(url));
+
+    if (response.statusCode == 200) {
+      final value = response.body;
+      if (value == '1') {
+        // Show the notification
+        showNotification(
+          title: 'SOS',
+          body: 'The person is in need of urgent emergency!🆘🆘🆘',
+        );
+      }
+    }
+  }
+
+  void startDataChecking() {
+    Timer.periodic(const Duration(seconds: 5), (timer) {
+      checkThingSpeakData();
+    });
+  }
+
+  void _setAlarmTime(int alarmNumber) async {
+    final hourController = hourControllers[alarmNumber - 1];
+    final minuteController = minuteControllers[alarmNumber - 1];
+
+    int hour = int.tryParse(hourController.text) ?? 0;
+    int minute = int.tryParse(minuteController.text) ?? 0;
+
+    // Update the alarm time using ThingSpeak API
+    final String url =
+        'https://api.thingspeak.com/update?api_key=$apiKey&field${(2 * alarmNumber) - 1}=$hour&field${2 * alarmNumber}=$minute';
+    final http.Response response = await http.get(Uri.parse(url));
+    if (response.statusCode == 200) {
+      setState(() {
+        alarmTimes[alarmNumber - 1] = 'Alarm set for $hour:$minute';
+      });
+    }
+    hourController.clear();
+    minuteController.clear();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('MediMate'),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            for (var i = 0; i < 3; i++)
+              AlarmSlot(
+                alarmTime: alarmTimes[i],
+                hourController: hourControllers[i],
+                minuteController: minuteControllers[i],
+                onPressed: () => _setAlarmTime(i + 1),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class AlarmSlot extends StatelessWidget {
+  const AlarmSlot({
+    Key? key,
+    required this.alarmTime,
+    required this.hourController,
+    required this.minuteController,
+    required this.onPressed,
+  }) : super(key: key);
+
+  final String alarmTime;
+  final TextEditingController hourController;
+  final TextEditingController minuteController;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16.0),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: TextFormField(
+              controller: hourController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: 'Hour',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
+          const SizedBox(width: 16.0),
+          Expanded(
+            flex: 2,
+            child: TextFormField(
+              controller: minuteController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: 'Minute',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
+          const SizedBox(width: 16.0),
+          Expanded(
+            flex: 3,
+            child: ElevatedButton(
+              onPressed: onPressed,
+              style: ButtonStyle(
+                shape: MaterialStateProperty.all<RoundedRectangleBorder>(
+                  RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8.0),
+                  ),
+                ),
+              ),
+              child: Text(
+                alarmTime,
+                style: const TextStyle(fontSize: 16.0),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

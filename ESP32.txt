@@ -1,0 +1,155 @@
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <ThingSpeak.h>
+#include <NTPClient.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <WiFiUdp.h>
+
+// Replace with your network credentials
+const char* ssid     = "garamspot";
+const char* password = "anirudh1";
+
+// Replace with your ThingSpeak API key and channel ID
+const char* apiKey   = "UGEKXJBHLT77KHYO";
+const long channelID = 2133477;
+
+// NTP Server
+const char* ntpServer = "pool.ntp.org";
+
+// Timezone Offset (in seconds)
+const int timeZoneOffset = 19800;
+
+// OLED Display
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+
+WiFiClient client;
+WiFiUDP udp;
+NTPClient timeClient(udp, ntpServer, timeZoneOffset);
+
+void setup() {
+  Serial.begin(115200);
+  connectToWiFi();
+  initNTP();
+  initOLED();
+  pinMode(18, OUTPUT);
+
+  // Initialize ThingSpeak library
+  ThingSpeak.begin(client);
+}
+
+void loop() {
+  // Read data from ThingSpeak channel
+  int field1 = ThingSpeak.readLongField(channelID, 1, apiKey);
+  int field2 = ThingSpeak.readLongField(channelID, 2, apiKey);
+  int field3 = ThingSpeak.readLongField(channelID, 3, apiKey);
+  int field4 = ThingSpeak.readLongField(channelID, 4, apiKey);
+  int field5 = ThingSpeak.readLongField(channelID, 5, apiKey);
+  int field6 = ThingSpeak.readLongField(channelID, 6, apiKey);
+
+  // Print the data to the serial monitor
+ /* Serial.print("Field 1: ");
+  Serial.println(field1);
+  Serial.print("Field 2: ");
+  Serial.println(field2);
+  Serial.print("Field 3: ");
+  Serial.println(field3);
+  Serial.print("Field 4: ");
+  Serial.println(field4);
+  Serial.print("Field 5: ");
+  Serial.println(field5);
+  Serial.print("Field 6: ");
+  Serial.println(field6);*/
+
+  // Get NTP time
+  timeClient.update();
+  String formattedTime = timeClient.getFormattedTime();
+  String x=formattedTime.substring(0,2);
+  String y=formattedTime.substring(3,5);
+  int NTP_hour=x.toInt();
+  int NTP_minute=y.toInt();
+
+  // Display NTP time on OLED
+  display.setTextSize(2);
+  display.setCursor(0, 20);
+  display.println(formattedTime);
+  display.display();
+  delay(500);
+  display.clearDisplay();
+
+    if (NTP_hour == field1&& NTP_minute==field2) {
+    display.setTextSize(2);
+    display.setCursor(0, 20);
+    display.println("Take Medicine");
+    display.display();
+    digitalWrite(18, HIGH); // Turn on the buzzer
+    delay(5000); 
+    digitalWrite(18, LOW); // Turn off the buzzer
+    delay(5000);
+    display.clearDisplay();
+  }
+  
+  // Check if NTP time matches Field 3 and Field 4 for Alarm 2
+  if (NTP_hour == field3&& NTP_minute==field4) {
+    display.setTextSize(2);
+    display.setCursor(0, 20);
+    display.println("Take Medicine");
+    display.display();
+    digitalWrite(18, HIGH); // Turn on the buzzer
+    delay(5000); 
+    digitalWrite(18, LOW); // Turn off the buzzer
+    delay(5000);
+    display.clearDisplay();
+  }
+// Check if NTP time matches Field 5 and Field 6 for Alarm 3
+if (NTP_hour == field5&& NTP_minute==field6) {
+    display.setTextSize(2);
+    display.setCursor(0, 20);
+    display.println("Take Medicine");
+    display.display();
+    digitalWrite(18, HIGH); // Turn on the buzzer
+    delay(5000); 
+    digitalWrite(18, LOW); // Turn off the buzzer
+    delay(5000);
+    display.clearDisplay();
+  }
+}
+void connectToWiFi() {
+  Serial.print("Connecting to WiFi...");
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nConnected to WiFi");
+}
+
+void initNTP() {
+  timeClient.begin();
+  timeClient.setTimeOffset(timeZoneOffset);
+}
+
+void initOLED() {
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println(F("SSD1306 allocation failed"));
+    for (;;);
+  }
+
+  display.clearDisplay();
+  display.setTextColor(WHITE);
+  display.setTextSize(1);
+  display.setCursor(0, 0);
+  display.println("Time:");
+  display.setTextSize(1);
+  display.setCursor(0,20);
+}
+
+
+
+
+
+
+
